@@ -1,0 +1,94 @@
+name: Infra Deploy
+
+on:
+  # manual trigger — run whenever you need to change infra
+  workflow_dispatch:
+
+  # PR — runs plan only, never apply
+  pull_request:
+    paths:
+      - 'infra/**'
+
+env:
+  AWS_REGION: ap-south-2
+  TF_DIR: infra/envs/dev
+
+jobs:
+  # ─── PLAN — runs on PR only ───────────────────────────
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.6.0"
+
+    - name: Terraform Init
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform plan
+      # shows exactly what will change
+      # reviewer sees this in PR before approving
+
+  # ─── APPLY — runs on manual trigger only ─────────────
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.6.0"
+
+    - name: Terraform Init
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform plan -out=tfplan
+
+    - name: Terraform Apply
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform apply -auto-approve tfplan
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig \
+          --name modak-dev \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Verify nodes are ready
+      run: |
+        kubectl wait --for=condition=Ready nodes \
+          --all \
+          --timeout=300s
+        kubectl get nodes
