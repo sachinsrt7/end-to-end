@@ -1,13 +1,15 @@
 name: Infra Deploy
 
 on:
-  # manual trigger — run whenever you need to change infra
-  workflow_dispatch:
-
-  # PR — runs plan only, never apply
   pull_request:
+    branches: [main]
     paths:
-      - 'infra/**'
+      - 'infra/**'     # plan runs on PR
+
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'     # apply runs on merge to main
 
 env:
   AWS_REGION: ap-south-2
@@ -43,14 +45,14 @@ jobs:
     - name: Terraform Plan
       working-directory: ${{ env.TF_DIR }}
       run: terraform plan
-      # shows exactly what will change
-      # reviewer sees this in PR before approving
+      # plan output visible in PR checks
+      # reviewer sees exactly what will change before approving
 
-  # ─── APPLY — runs on manual trigger only ─────────────
+  # ─── APPLY — runs on merge to main only ──────────────
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push'
 
     steps:
     - name: Checkout code
