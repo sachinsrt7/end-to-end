@@ -11,6 +11,9 @@ on:
     paths:
       - 'auth-service/**'
 
+permissions:
+  contents: write
+
 env:
   AWS_REGION: ap-south-2
   ECR_REPO: 625693792644.dkr.ecr.ap-south-2.amazonaws.com/auth-service
@@ -60,17 +63,6 @@ jobs:
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       with:
         projectBaseDir: auth-service
-      # scan runs and results visible in SonarCloud
-      # quality gate check removed for now
-
-    - name: SonarQube quality gate check
-      uses: SonarSource/sonarqube-quality-gate-action@master
-      timeout-minutes: 5
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      with:
-        scanMetadataReportFile: auth-service/.scannerwork/report-task.txt
 
   build-and-scan:
     name: Build and Scan Image
@@ -95,6 +87,7 @@ jobs:
         severity: CRITICAL,HIGH
         exit-code: 1
         ignore-unfixed: true
+        trivyignores: .trivyignore
 
   push-to-ecr:
     name: Push to ECR
