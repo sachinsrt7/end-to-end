@@ -1,0 +1,90 @@
+name: Bootstrap Deploy
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/bootstrap/**'   # plan runs on PR
+
+  push:
+    branches: [main]
+    paths:
+      - 'infra/bootstrap/**'   # apply runs on merge to main
+
+env:
+  AWS_REGION: ap-south-2
+  TF_DIR: infra/bootstrap
+
+jobs:
+  # ─── PLAN — runs on PR only ───────────────────────────
+  bootstrap-plan:
+    name: Bootstrap Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.6.0"
+
+    - name: Terraform Init
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform init
+      # bootstrap uses local state — no S3 backend needed
+      # S3 doesn't exist yet at this point
+
+    - name: Terraform Plan
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform plan
+      # shows what will be created:
+      # S3 bucket, DynamoDB table, ECR repos
+
+  # ─── APPLY — runs on merge to main only ──────────────
+  bootstrap-apply:
+    name: Bootstrap Apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.6.0"
+
+    - name: Terraform Init
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform plan -out=tfplan
+
+    - name: Terraform Apply
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform apply -auto-approve tfplan
+
+    - name: Show outputs
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform output
+      # prints ECR URLs, S3 bucket name, DynamoDB table
