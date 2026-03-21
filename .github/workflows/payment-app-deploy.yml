@@ -43,7 +43,7 @@ jobs:
       working-directory: payment-service
       run: |
         pip install pytest
-        pytest tests/ -v || echo "No tests found — skipping"
+        pytest tests/ -v || echo "No tests found - skipping"
 
   sonarqube-scan:
     name: SonarQube Scan
@@ -156,4 +156,24 @@ jobs:
         git add payment-service/k8s/deployment.yml
         git diff --staged --quiet || git commit -m \
           "deploy: update ${{ env.SERVICE_NAME }} image to ${{ github.sha }}"
+        git push
+
+    - name: Apply to EKS
+      run: |
+        kubectl apply -f shared/k8s/namespace.yml
+        kubectl apply -f payment-service/k8s/deployment.yml
+        kubectl apply -f payment-service/k8s/service.yml
+
+    - name: Wait for rollout
+      run: |
+        kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
+          --namespace ${{ env.NAMESPACE }} \
+          --timeout=120s
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        kubectl rollout undo deployment/${{ env.SERVICE_NAME }} \
+          --namespace ${{ env.NAMESPACE }}
+        git revert HEAD --no-edit
         git push
