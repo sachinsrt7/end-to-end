@@ -4,19 +4,20 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'infra/**'     # plan runs on PR
+      - 'infra/envs/**'
+      - 'infra/modules/**'
 
   push:
     branches: [main]
     paths:
-      - 'infra/**'     # apply runs on merge to main
+      - 'infra/envs/**'
+      - 'infra/modules/**'
 
 env:
   AWS_REGION: ap-south-2
   TF_DIR: infra/envs/dev
 
 jobs:
-  # ─── PLAN — runs on PR only ───────────────────────────
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
@@ -45,10 +46,7 @@ jobs:
     - name: Terraform Plan
       working-directory: ${{ env.TF_DIR }}
       run: terraform plan
-      # plan output visible in PR checks
-      # reviewer sees exactly what will change before approving
 
-  # ─── APPLY — runs on merge to main only ──────────────
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest

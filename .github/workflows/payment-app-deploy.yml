@@ -4,12 +4,12 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'payment-service/**'   # test + scan on PR
+      - 'payment-service/**'
 
   push:
     branches: [main]
     paths:
-      - 'payment-service/**'   # full deploy on merge to main
+      - 'payment-service/**'
 
 env:
   AWS_REGION: ap-south-2
@@ -19,7 +19,6 @@ env:
   NAMESPACE: production
 
 jobs:
-  # ─── JOB 1 — TEST (runs on PR + push) ─────────────────
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -43,7 +42,6 @@ jobs:
         pip install pytest
         pytest tests/ -v || echo "No tests found — skipping"
 
-  # ─── JOB 2 — SONARQUBE SCAN (runs on PR + push) ───────
   sonarqube-scan:
     name: SonarQube Scan
     runs-on: ubuntu-latest
@@ -70,47 +68,35 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-  # ─── JOB 3 — BUILD + TRIVY SCAN (runs on PR + push) ───
   build-and-scan:
     name: Build and Scan Image
     runs-on: ubuntu-latest
     needs: sonarqube-scan
-    outputs:
-      image_tag: ${{ steps.set-tag.outputs.image_tag }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set image tag
-      id: set-tag
-      run: |
-        echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
-
     - name: Build Docker image
       run: |
         docker build \
-          -t ${{ env.ECR_REPO }}:${{ steps.set-tag.outputs.image_tag }} \
+          -t ${{ env.ECR_REPO }}:${{ github.sha }} \
           payment-service/
 
     - name: Scan image with Trivy
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.ECR_REPO }}:${{ steps.set-tag.outputs.image_tag }}
+        image-ref: ${{ env.ECR_REPO }}:${{ github.sha }}
         format: table
         severity: CRITICAL,HIGH
         exit-code: 1
         ignore-unfixed: true
-      # on PR — scan result visible in PR checks
-      # if vulnerabilities found — PR cannot be merged
 
-  # ─── JOB 4 — PUSH TO ECR (runs on merge to main only) ─
   push-to-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
     needs: build-and-scan
     if: github.event_name == 'push'
-    # only pushes to ECR after PR is approved and merged
 
     steps:
     - name: Checkout code
@@ -134,9 +120,7 @@ jobs:
           -t ${{ env.ECR_REPO }}:${{ github.sha }} \
           payment-service/
         docker push ${{ env.ECR_REPO }}:${{ github.sha }}
-        echo "Pushed: ${{ env.ECR_REPO }}:${{ github.sha }}"
 
-  # ─── JOB 5 — DEPLOY TO EKS (runs on merge to main only)
   deploy:
     name: Deploy to EKS
     runs-on: ubuntu-latest
@@ -167,9 +151,8 @@ jobs:
         IMAGE="${{ env.ECR_REPO }}:${{ github.sha }}"
         sed -i "s|PAYMENT_IMAGE_PLACEHOLDER|$IMAGE|g" \
           payment-service/k8s/deployment.yml
-        echo "Updated manifest with image: $IMAGE"
 
-    - name: Commit updated manifest to repo
+    - name: Commit updated manifest
       run: |
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
@@ -178,7 +161,7 @@ jobs:
           "deploy: update ${{ env.SERVICE_NAME }} image to ${{ github.sha }}"
         git push
 
-    - name: Apply manifests to EKS
+    - name: Apply to EKS
       run: |
         kubectl apply -f shared/k8s/namespace.yml
         kubectl apply -f payment-service/k8s/deployment.yml
@@ -190,11 +173,10 @@ jobs:
           --namespace ${{ env.NAMESPACE }} \
           --timeout=120s
 
-    - name: Rollback and revert on failure
+    - name: Rollback on failure
       if: failure()
       run: |
         kubectl rollout undo deployment/${{ env.SERVICE_NAME }} \
           --namespace ${{ env.NAMESPACE }}
         git revert HEAD --no-edit
         git push
-        echo "Rollback complete"

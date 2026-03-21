@@ -4,19 +4,18 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'shared/k8s/**'    # plan runs on PR when k8s files change
+      - 'shared/k8s/**'
 
   push:
     branches: [main]
     paths:
-      - 'shared/k8s/**'    # apply runs on merge to main
+      - 'shared/k8s/**'
 
 env:
   AWS_REGION: ap-south-2
   EKS_CLUSTER: modak-dev
 
 jobs:
-  # ─── PREVIEW — runs on PR only ────────────────────────
   k8s-dry-run:
     name: K8s Dry Run
     runs-on: ubuntu-latest
@@ -47,8 +46,6 @@ jobs:
     - name: Dry run namespace
       run: |
         kubectl apply -f shared/k8s/namespace.yml --dry-run=server
-        # dry-run=server validates against real cluster
-        # shows what would be created without creating it
 
     - name: Dry run ingress rules
       run: |
@@ -64,9 +61,7 @@ jobs:
           --namespace ingress-nginx \
           --create-namespace \
           --dry-run
-        # shows what helm would install without actually installing
 
-  # ─── APPLY — runs on merge to main only ──────────────
   k8s-setup:
     name: K8s Setup
     runs-on: ubuntu-latest
@@ -94,12 +89,12 @@ jobs:
       with:
         version: '3.13.0'
 
-    - name: Job 1 — Create namespace
+    - name: Create namespace
       run: |
         kubectl apply -f shared/k8s/namespace.yml
         kubectl get namespace production
 
-    - name: Job 2 — Install nginx ingress controller
+    - name: Install nginx ingress controller
       run: |
         helm repo add ingress-nginx \
           https://kubernetes.github.io/ingress-nginx
@@ -111,7 +106,7 @@ jobs:
           --set controller.replicaCount=2 \
           --wait
 
-    - name: Job 3 — Apply ingress routing rules
+    - name: Apply ingress routing rules
       run: |
         kubectl apply -f shared/k8s/ingress.yml
         kubectl get ingress -n production

@@ -4,19 +4,18 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'infra/bootstrap/**'   # plan runs on PR
+      - 'infra/bootstrap/**'
 
   push:
     branches: [main]
     paths:
-      - 'infra/bootstrap/**'   # apply runs on merge to main
+      - 'infra/bootstrap/**'
 
 env:
   AWS_REGION: ap-south-2
   TF_DIR: infra/bootstrap
 
 jobs:
-  # ─── PLAN — runs on PR only ───────────────────────────
   bootstrap-plan:
     name: Bootstrap Plan
     runs-on: ubuntu-latest
@@ -41,16 +40,11 @@ jobs:
     - name: Terraform Init
       working-directory: ${{ env.TF_DIR }}
       run: terraform init
-      # bootstrap uses local state — no S3 backend needed
-      # S3 doesn't exist yet at this point
 
     - name: Terraform Plan
       working-directory: ${{ env.TF_DIR }}
       run: terraform plan
-      # shows what will be created:
-      # S3 bucket, DynamoDB table, ECR repos
 
-  # ─── APPLY — runs on merge to main only ──────────────
   bootstrap-apply:
     name: Bootstrap Apply
     runs-on: ubuntu-latest
@@ -87,4 +81,3 @@ jobs:
     - name: Show outputs
       working-directory: ${{ env.TF_DIR }}
       run: terraform output
-      # prints ECR URLs, S3 bucket name, DynamoDB table
