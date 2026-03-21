@@ -1,4 +1,4 @@
-region          = "ap-south-2"
+region          = "ap-south-2" #hyderabad
 cluster_name    = "modak-dev"
 cluster_version = "1.29"
 
