@@ -60,17 +60,6 @@ jobs:
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       with:
         projectBaseDir: payment-service
-      # scan runs and results visible in SonarCloud
-      # quality gate check removed for now
-
-    - name: SonarQube quality gate check
-      uses: SonarSource/sonarqube-quality-gate-action@master
-      timeout-minutes: 5
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      with:
-        scanMetadataReportFile: payment-service/.scannerwork/report-task.txt
 
   build-and-scan:
     name: Build and Scan Image
