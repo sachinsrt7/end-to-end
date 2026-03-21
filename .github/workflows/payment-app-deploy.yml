@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'payment-service/**'   # only triggers when payment-service files change
+      - 'payment-service/**'
 
 env:
   AWS_REGION: ap-south-2
@@ -37,19 +37,18 @@ jobs:
       run: |
         pip install pytest
         pytest tests/ -v || echo "No tests found — skipping"
-      # once you add tests/ folder with test files, pytest picks them up automatically
 
   # ─── JOB 2 — SONARQUBE SCAN ───────────────────────────
   sonarqube-scan:
     name: SonarQube Scan
     runs-on: ubuntu-latest
-    needs: test       # only runs if test job passed
+    needs: test
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0    # full history needed for sonar blame info
+        fetch-depth: 0
 
     - name: SonarQube scan
       uses: SonarSource/sonarqube-scan-action@master
@@ -66,15 +65,14 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       # pipeline fails here if code quality is below threshold
-      # next job (push to ECR) will NOT run if this fails
 
-  # ─── JOB 3 — BUILD + PUSH TO ECR ─────────────────────
+  # ─── JOB 3 — BUILD + TRIVY SCAN + PUSH TO ECR ────────
   build-and-push:
-    name: Build Image and Push to ECR
+    name: Build, Scan and Push to ECR
     runs-on: ubuntu-latest
-    needs: sonarqube-scan    # only runs if sonar scan passed
+    needs: sonarqube-scan
     outputs:
-      image_tag: ${{ steps.set-tag.outputs.image_tag }}    # passes image tag to job 4
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
 
     steps:
     - name: Checkout code
@@ -104,26 +102,41 @@ jobs:
         docker build \
           -t ${{ env.ECR_REPO }}:${{ steps.set-tag.outputs.image_tag }} \
           payment-service/
-        # Dockerfile in payment-service/ is read automatically
-        # app.py is copied into the image during build
-        # image is tagged with the git commit SHA
+        # Dockerfile reads app.py from workspace
+        # image tagged with git commit SHA
+
+    - name: Scan image with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.ECR_REPO }}:${{ steps.set-tag.outputs.image_tag }}
+        format: table
+        severity: CRITICAL,HIGH
+        exit-code: 1
+        ignore-unfixed: true
+      # scans built image for OS and package vulnerabilities
+      # exit-code 1 = pipeline fails if CRITICAL or HIGH CVEs found
+      # image is NOT pushed to ECR if this step fails
+      # two layers of scanning:
+      #   job 2 = SonarQube scans source code
+      #   this step = Trivy scans the Docker image
 
     - name: Push to ECR
       run: |
         docker push ${{ env.ECR_REPO }}:${{ steps.set-tag.outputs.image_tag }}
         echo "Pushed: ${{ env.ECR_REPO }}:${{ steps.set-tag.outputs.image_tag }}"
+      # only reaches here if Trivy scan passed
 
   # ─── JOB 4 — DEPLOY TO EKS ────────────────────────────
   deploy:
     name: Deploy to EKS
     runs-on: ubuntu-latest
-    needs: build-and-push    # only runs if image was pushed successfully
+    needs: build-and-push
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}   # needed to commit manifest back
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -153,8 +166,6 @@ jobs:
         git diff --staged --quiet || git commit -m \
           "deploy: update ${{ env.SERVICE_NAME }} image to ${{ needs.build-and-push.outputs.image_tag }}"
         git push
-      # git diff --staged --quiet = only commits if file actually changed
-      # avoids empty commits if image tag is same
 
     - name: Apply manifests to EKS
       run: |
@@ -172,13 +183,8 @@ jobs:
       if: failure()
       run: |
         echo "Deployment failed — rolling back"
-
-        # step 1 — rollback K8s to previous image instantly
         kubectl rollout undo deployment/${{ env.SERVICE_NAME }} \
           --namespace ${{ env.NAMESPACE }}
-
-        # step 2 — revert manifest commit so repo matches cluster
         git revert HEAD --no-edit
         git push
-
         echo "Rollback complete — cluster and repo are back in sync"
