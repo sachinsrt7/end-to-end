@@ -1,0 +1,68 @@
+name: K8s Resources Destroy
+
+on:
+  workflow_dispatch:    # manual trigger only
+
+env:
+  AWS_REGION: ap-south-2
+  EKS_CLUSTER: modak-dev
+
+jobs:
+  k8s-destroy:
+    name: Remove K8s and Monitoring Resources
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig \
+          --name ${{ env.EKS_CLUSTER }} \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.0'
+
+    - name: Remove monitoring stack
+      run: |
+        helm uninstall monitoring -n monitoring || true
+        kubectl delete namespace monitoring || true
+      # removes Prometheus, Grafana, Alertmanager
+
+    - name: Remove app deployments
+      run: |
+        kubectl delete -f payment-service/k8s/ || true
+        kubectl delete -f auth-service/k8s/ || true
+      # removes payment and auth pods, services
+
+    - name: Remove shared resources
+      run: |
+        kubectl delete -f shared/k8s/ingress.yml || true
+        kubectl delete namespace production || true
+      # removes ingress rules and production namespace
+
+    - name: Remove nginx ingress controller
+      run: |
+        helm uninstall ingress-nginx -n ingress-nginx || true
+        kubectl delete namespace ingress-nginx || true
+        echo "Waiting for Load Balancer to terminate..."
+        sleep 60
+      # IMPORTANT — removes AWS NLB
+      # must complete before infra-destroy runs
+      # otherwise VPC destroy will fail
+
+    - name: Verify all namespaces removed
+      run: |
+        kubectl get namespaces
+        echo "Make sure production, monitoring, ingress-nginx are gone"
