@@ -46,10 +46,13 @@ jobs:
     - name: Dry run namespace
       run: |
         kubectl apply -f shared/k8s/namespace.yml --dry-run=server
+      # validates against real cluster
 
     - name: Dry run ingress rules
       run: |
-        kubectl apply -f shared/k8s/ingress.yml --dry-run=server
+        kubectl apply -f shared/k8s/ingress.yml --dry-run=client
+      # client dry run — validates yaml structure only
+      # namespace doesnt exist yet so cant use server dry run
 
     - name: Helm dry run nginx ingress
       run: |
@@ -113,6 +116,7 @@ jobs:
 
     - name: Get Load Balancer URL
       run: |
+        echo "Load Balancer URL:"
         kubectl get svc ingress-nginx-controller \
           -n ingress-nginx \
           -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
