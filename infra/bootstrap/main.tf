@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "aws" {
-  region = "ap-south-2"
+  region = "ap-south-2" #hyderabad
 }
 
 # S3 bucket for Terraform remote state
