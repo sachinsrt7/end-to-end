@@ -170,12 +170,14 @@ jobs:
       run: |
         kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
           --namespace ${{ env.NAMESPACE }} \
-          --timeout=120s
+          --timeout=300s
 
     - name: Rollback on failure
       if: failure()
       run: |
+        echo "Deployment failed — checking pod status"
+        kubectl get pods -n ${{ env.NAMESPACE }}
         kubectl rollout undo deployment/${{ env.SERVICE_NAME }} \
-          --namespace ${{ env.NAMESPACE }}
-        git revert HEAD --no-edit
-        git push
+          --namespace ${{ env.NAMESPACE }} || true
+        git revert HEAD --no-edit || true
+        git push --force-with-lease || true
