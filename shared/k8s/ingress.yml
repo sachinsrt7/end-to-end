@@ -16,7 +16,35 @@ spec:
             name: payment-service
             port:
               number: 80
+      - path: /slow
+        pathType: Prefix
+        backend:
+          service:
+            name: payment-service
+            port:
+              number: 80
+      - path: /error
+        pathType: Prefix
+        backend:
+          service:
+            name: payment-service
+            port:
+              number: 80
       - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-service
+            port:
+              number: 80
+      - path: /verify
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-service
+            port:
+              number: 80
+      - path: /fail
         pathType: Prefix
         backend:
           service:
