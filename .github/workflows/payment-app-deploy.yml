@@ -146,8 +146,9 @@ jobs:
     - name: Update image tag in manifest
       run: |
         IMAGE="${{ env.ECR_REPO }}:${{ github.sha }}"
-        sed -i "s|PAYMENT_IMAGE_PLACEHOLDER|$IMAGE|g" \
+        sed -i "s|image:.*payment-service.*|image: $IMAGE|g" \
           payment-service/k8s/deployment.yml
+        echo "Updated manifest with image: $IMAGE"
 
     - name: Commit updated manifest
       run: |
