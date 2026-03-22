@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: payment-service
-        image: 625693792644.dkr.ecr.ap-south-2.amazonaws.com/payment-service:8501fdaf8c6daa172d3d2280b1524d791c1436b1
+        image: 625693792644.dkr.ecr.ap-south-2.amazonaws.com/payment-service:a90ed798099c98c09f0c819594e2f97b44aabd0a
         ports:
         - containerPort: 8080
         resources:
