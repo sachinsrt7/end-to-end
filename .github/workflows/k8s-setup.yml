@@ -1,6 +1,7 @@
 name: K8s Cluster Setup
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
