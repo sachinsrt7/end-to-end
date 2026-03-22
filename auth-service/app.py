@@ -1,10 +1,10 @@
+# auth service
 from flask import Flask, jsonify
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 import time
 
 app = Flask(__name__)
 
-# Prometheus metrics
 REQUEST_COUNT = Counter(
     'http_requests_total',
     'Total HTTP requests',
@@ -15,6 +15,10 @@ REQUEST_LATENCY = Histogram(
     'HTTP request latency',
     ['endpoint']
 )
+
+@app.route('/')
+def root():
+    return jsonify({"status": "auth ok", "service": "auth-service"}), 200
 
 @app.route('/health')
 def health():
